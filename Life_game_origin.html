@@ -1,0 +1,337 @@
+
+<script>
+  class Life {
+    
+    constructor(height, width) {
+      this.add = 'none';
+      this.botCount = 0;
+      this.epoch = 0;
+      this.maxAge = 0;
+      this.steps = 0;
+      this.bestGen = [];
+      this.history = [];
+      let rnd;
+      this.field = [];
+      for(let i = 0; i < height; i++) {
+        this.field.push([]);
+        for(let j = 0; j < width; j++) {
+          rnd = Math.round(100 * Math.random());
+          if(rnd < 7) {
+            this.field[i].push('food');
+          }
+          else if(rnd < 14) {
+            this.field[i].push('toxic');
+          }
+          else if(rnd < 16) {
+            this.field[i].push('wall');
+          }
+          else {
+            this.field[i].push('free');
+          }
+          if(i == 0 || j == 0 || i == (height - 1) || j == (width - 1)) this.field[i][j] = 'wall';
+        }
+      }
+    }
+    
+    populate(numOfBots) {
+      let i = 0;
+      let x, y;
+      this.bot = [];
+      let f = this.field;
+      while(i < numOfBots) {
+        y = Math.round((f.length - 1) * Math.random());
+        x = Math.round((f[0].length - 1) * Math.random());
+        if(f[y][x] == 'free') {
+          f[y][x] = i;
+          i++;
+          this.bot.push({
+            posX: x,
+            posY: y,
+            course: 0,
+            step: 0,
+            energy: 90,
+            age: 0,
+            state: 'alive',
+            gen: []
+          });
+        }
+      }
+      this.field = f;
+    }
+    
+    createGenom() {
+      for(let j = 0; j < this.bot.length; j++) {
+        for(let i = 0; i < 64; i++) {
+          this.bot[j].gen.push(Math.round(63 * Math.random()));
+        }
+      }
+    }
+    
+    doHint(num) {
+      if(this.bot[num].state == 'dead') return;
+      const dx = [-1, 0, 1, 1, 1, 0, -1, -1];
+      const dy = [-1, -1, -1, 0, 1, 1, 1, 0];
+      const maxX = this.field[0].length - 1;
+      const maxY = this.field.length - 1;
+      let px = this.bot[num].posX;
+      let py = this.bot[num].posY;
+      let x, y;
+      let i = 0, s = 0, status = '1';
+      while(i < 10 && status != 'hint') {
+        let code = this.bot[num].gen[this.bot[num].step];
+        // Запись истории 30-го бота
+        if(num == 30) {
+          this.history.push([
+            this.bot[num].step,
+            code,
+            1,
+            '   '
+          ]);
+        }
+        if(code < 8) { // Команда шаг
+          s = code + this.bot[num].course;
+          if(s > 7) s -= 8;
+          x = px + dx[s]; y = py + dy[s];
+          if(num == 30) {
+            this.history[this.history.length - 1][1] = 'Step' + s;
+            this.history[this.history.length - 1][2] = this.field[y][x];
+            this.history[this.history.length - 1][3] = ' // ';
+          }
+          switch(this.field[y][x]) {
+            case 'free':
+              this.field[y][x] = num;
+              this.field[py][px] = 'free';
+              this.bot[num].posX = x;
+              this.bot[num].posY = y;
+              break;
+            case 'wall': this.bot[num].step++; break;
+            case 'food': 
+              this.bot[num].energy += 10;
+              this.field[y][x] = num;
+              this.field[py][px] = 'free';
+              this.bot[num].step += 2;
+              this.bot[num].posX = x;
+              this.bot[num].posY = y;
+              this.add = 'food';
+              break;
+            case 'toxic':
+              this.bot[num].energy = 0;
+              break;
+            default: this.bot[num].step += 3;
+          }
+          status = 'hint';
+        } // Команда схватить
+        else if(code < 16) {
+          s = code - 8 + this.bot[num].course;
+          if(s > 7) s -= 8;
+          x = px + dx[s]; y = py + dy[s];
+          if(num == 30) {
+            this.history[this.history.length - 1][1] = 'Get' + s;
+            this.history[this.history.length - 1][2] = this.field[y][x];
+            this.history[this.history.length - 1][3] = ' // ';
+          }
+          switch(this.field[y][x]) {
+            case 'free': break;
+            case 'wall': this.bot[num].step++; break;
+            case 'food': 
+              this.bot[num].energy += 10;
+              this.bot[num].step += 2;
+              this.field[y][x] = 'free';
+              this.add = 'food';
+              break;
+            case 'toxic':
+              this.bot[num].step += 3;
+              this.field[y][x] = 'food';
+              break;
+            default: this.bot[num].step += 4;
+          }
+          status = 'hint';
+        } // Команда посмотреть
+        else if(code < 24) {
+          s = code - 16 + this.bot[num].course;
+          if(s > 7) s -= 8;
+          x = px + dx[s]; y = py + dy[s];
+          if(num == 30) {
+            this.history[this.history.length - 1][1] = 'Look' + s;
+            this.history[this.history.length - 1][2] = this.field[y][x];
+            if(i == 9) this.history[this.history.length - 1][3] = ' // ';
+          }
+          switch(this.field[y][x]) {
+            case 'free': break;
+            case 'wall': this.bot[num].step++; break;
+            case 'food': this.bot[num].step += 2; break;
+            case 'toxic': this.bot[num].step += 3; break;
+            default: this.bot[num].step += 4;
+          }
+        } //Команда поворот
+        else if(code < 32) {
+          this.bot[num].course += code - 24;
+          if(num == 30) {
+            this.history.pop();
+            this.history.push('?');
+            if(i == 9) this.history.push(' // ');
+          }
+          if(this.bot[num].course > 7) this.bot[num].course -= 8;
+        }  // Команда переход
+        else {
+          if(num == 30) {
+            this.history.pop();
+            this.history.push('>');
+            if(i == 9) this.history.push(' // ');
+          }
+          this.bot[num].step += code;
+        }
+        // Последние проверки
+        this.bot[num].step++;
+        if(this.bot[num].step > 63) this.bot[num].step -= 64;
+        i++;
+      }
+      this.bot[num].age++;
+      this.bot[num].energy--;
+      if(this.bot[num].energy < 1) {
+        this.bot[num].state = 'dead';
+        this.botCount++;
+        this.field[this.bot[num].posY][this.bot[num].posX] = 'free';
+      }
+      if(this.bot[num].energy > 90) this.bot[num].energy = 90;
+    }
+    
+    addFood() {
+      let food;
+      const FF = Math.random();
+      FF < 0.5 ? food = 'food' : food = 'toxic';
+      while(this.add != 'none') {
+        let y = Math.round((this.field.length-1) * Math.random());
+        let x = Math.round((this.field[1].length-1) * Math.random());
+        if(this.field[y][x] == 'free') {
+          this.field[y][x] = food;
+          this.add = 'none';
+        }
+      }
+    }
+    
+    selection() {
+      let i = 0;
+      this.bestGen = [];
+      for(let j = 0; j < 4; j++) {
+        while(this.bot[i].state != 'alive') {
+          i++;
+        }
+        this.bestGen.push(this.bot[i].gen);
+        this.maxAge = this.bot[i].age;
+        this.field[this.bot[i].posY][this.bot[i].posX] = 'free';
+        i++;
+      }
+    }
+    
+    mutation() {
+      let mutGen, mutVal, mutLen, g;
+      for(let j = 0; j < this.bot.length; j++) {
+        g = Math.round(3 * Math.random());
+        this.bot[j].gen = this.bestGen[g].slice();
+      }
+      for(let f = 0; f < 6; f++) {
+        mutLen = 3 * Math.random();
+        for(let b = 0; b < mutLen; b++) {
+          mutGen = Math.round(63 * Math.random());
+          mutVal = Math.round(63 * Math.random());
+          this.bot[f].gen[mutGen] = mutVal;
+        }
+      }
+    }
+    
+    point() {
+      document.write('<meta charset="utf-8">');
+      document.write('<body style="background-color:black">');
+      document.write('<button style="font: 70px Arial; margin: 20px" onclick="start()">Start</button>');
+      document.write('<button style="font: 70px Arial; margin: 20px" onclick="stop()">Stop</button>');
+      document.write('<button style="font: 30px Arial; margin: 10px">N° ' + this.epoch + '</button>');
+      document.write('<button style="font: 30px Arial; margin: 10px">Age ' + this.maxAge + '</button>');
+      document.write('<button style="font: 30px Arial; margin: 10px">Step ' + this.steps + '</button>');
+      document.write('<table style="background-color:white">');
+      for(let i = 0; i < this.field.length; i++) {
+        document.write('<tr>');
+        for(let j = 0; j < this.field[1].length; j++) {
+          switch(this.field[i][j]) {
+            case 'free': document.write('<td height="50px" width="50px" style="background-color:black"></td>'); break;
+            case 'wall': document.write('<td height="50px" width="50px" style="background-color:gray"></td>'); break;
+            case 'food': document.write('<td height="50px" width="50px" style="background-color:green"></td>'); break;
+            case 'toxic': document.write('<td height="50px" width="50px" style="background-color:red"></td>'); break;
+            default: document.write('<td height="50px" width="50px" style="background-color:blue; font:30px Arial; color:white">' + this.bot[this.field[i][j]].energy + '</td>');
+          }
+        }
+        document.write('</tr>');
+      }
+      document.write('</table>');
+    }
+    
+  }
+  
+  
+  const POPUL = 32;
+  let d = new Life(26, 17);
+  d.populate(POPUL);
+  d.createGenom();
+  d.point();
+  d.botCount = 0;
+  
+  let simulate, draw;
+  let count = 0;
+  
+  function start() {
+    let simTime, drawTime;
+    if(confirm('Fast speed?')) {
+      drawTime = 1000;
+      simTime = 5;
+      simulate = setInterval(
+        () => {
+          for(let b = 0; b < 5000; b++) {
+            process();
+          }
+        },
+        simTime
+      );
+    } else {
+      drawTime = 150;
+      simTime = 5;
+      simulate = setInterval(
+        process,
+        simTime
+      );
+    }
+    
+    draw = setInterval(
+      () => {
+        document.body.innerHTML = '';
+        d.point();
+      },
+      drawTime
+    );
+  }
+      
+  function stop() {
+    clearInterval(simulate);
+    clearInterval(draw);
+    alert(d.history);
+  }
+  
+  function process() {
+    d.doHint(count);
+    d.addFood();
+    if(d.botCount > (d.bot.length - 5)) {
+      d.selection();
+      d.populate(POPUL);
+      d.mutation();
+      d.botCount = 0;
+      d.epoch++;
+      d.steps = 0;
+      d.history = [];
+    }
+    count++;
+    if(count > (d.bot.length - 1)) {
+      count = 0;
+      d.steps++;
+    }
+  }
+  
+</script>
